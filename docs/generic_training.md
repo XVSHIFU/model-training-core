@@ -41,7 +41,7 @@ uv run --locked model-workflow evaluate --artifact $artifactPath --data examples
 | artifact_path | 旧模型配置直接加载外部模型的路径 |
 | evaluation_mode | 文本用 classification；上传使用 semantic 或 TDP 口径 |
 
-配置中的相对路径以**配置文件所在目录**为基准。CLI 的 `--input`、`--data`、`--run-root` 等相对路径以执行命令的当前目录为基准。
+配置中的相对路径以**配置文件所在目录**为基准。CLI 的 `--input`、`--data`、`--run-root` 等相对路径以执行命令的当前目录为基准。使用 `--artifact` 时，默认输出为当前工作目录的 `runs/`；可用 `MODEL_TRAINING_HOME` 指定工作区，或用 `--run-root` 覆盖。工作区不从 Python 安装路径推断，配置中显式的 `run_root` 仍按配置目录解释。
 
 文本任务允许 `parameters.vectorizer`、`parameters.classifier` 设置后端参数。上传任务目前只开放 `parameters.thresholds`，保留原训练设置。切换其他任务不应靠修改上传标签或 24 维特征来实现。
 
@@ -71,7 +71,9 @@ uv run --locked model-workflow evaluate --artifact $artifactPath --data examples
 }
 ```
 
-文本类别为非空字符串，结构特征为等宽、有限的数值列表。训练使用了结构特征，预测必须提供相同宽度；未使用时保持空列表。ID、source、group_id 和目标不会自动进入模型特征。
+文本类别为非空字符串，结构特征为等宽、有限的数值列表。训练使用了结构特征，预测必须提供相同宽度；未使用时保持空列表。ID 必须是非空字符串，不把 null 或数字强制转为字符串；source 为字符串，group_id 为非空字符串或 null，metadata 为对象。ID、source、group_id 和目标不会自动进入模型特征。
+
+读取器从同一次读取的字节解析并计算 SHA-256；模型所见样本与报告中的数据身份保持一致，即使源路径随后被其他进程修改。运行开始时复制配置，调用者后续修改不会改变正在执行的任务。这不提供文件系统快照或流式大数据训练。
 
 上传使用原 event_id、request、response，标签来自 label 或 gold_verdict。它仍判断文件接收/保存结果，不能把上传成功解释为代码执行成功。
 
@@ -97,7 +99,7 @@ uv run --locked model-workflow evaluate --artifact $artifactPath --data examples
 
 validate-data 读取配置中的全部分区；train 只读取训练和开发。多来源训练数据应先显式合并；公共层提供 merge_samples，没有单独的合并 CLI。
 
-检查维度包括 ID、精确内容、任务模板和 group。空指纹不被当成公共分组。不能只换 ID 避开内容交叉；也不能把“没有指纹交叉”当作真实独立性的证明。
+检查维度包括 ID、精确内容、任务模板和 group。空指纹不被当成公共分组。独立资格要求非空训练参考以及内容/模板指纹覆盖完整；覆盖按样本计数，重复内容不算缺失。group 可选，覆盖情况单独报告。不能只换 ID 避开内容交叉；也不能把“没有指纹交叉”当作真实独立性的证明。
 
 **所有参与选型的数据应在训练配置中登记为 development。** 训练后另外查看数据并据此调参，应保留该使用记录，并纳入下一版 development。仓库外的人为选型不能被软件自动发现。
 
@@ -130,13 +132,17 @@ runs/<run_id>/
 
 预测和评测仍分别新建输出运行目录。预测有 predictions.jsonl；评测还有 evaluation_spec.json、lineage_report.json、metrics.json。不要覆盖旧运行来刷新结果。
 
-manifest 关联模型、配置、lineage 和相关记录，并校验登记文件的完整性。lineage 保存经过哈希处理的 ID、内容、模板和分组成员键，使制品迁移后仍可查交叉；它不是完整数据备份，也不能证明来源真实性。
+manifest 关联模型、配置、lineage 和相关记录，并校验登记文件的完整性。加载还要求训练 run.json 状态为 succeeded，running、failed、interrupted 或缺少完成记录都不会被视为可用制品。状态通过原子文件发布更新；可处理的中断记为 interrupted，强制终止可能保留 running。重跑创建新运行，不续训半成品。
 
-后续评测在制品的 evaluation_history 追加使用记录，**不修改冻结的模型和 manifest**。再次申请独立资格时，除训练 lineage 外，还检查记录中的 development/historical 使用数据。同一冻结模型重复运行 independent 可以复验，但不是新增的独立数据。外部旧 joblib 没有训练 lineage，仍不能取得独立资格。
+lineage 保存经过哈希处理的 ID、内容、模板和分组成员键及每行覆盖统计，使制品迁移后仍可查交叉；它不是完整数据备份，也不能证明来源真实性。旧版 v1 仍可读；不能从旧成员清单确认覆盖完整时，允许历史回归，但拒绝独立资格。
+
+后续评测在制品的 evaluation_history 追加使用记录，**不修改冻结的模型和 manifest**。本地跨进程锁覆盖历史校验、用途登记和模型评测；用途在执行模型前登记，失败或中断仍保留。锁等待超时明确失败，不忽略现有使用。所有历史记录都先验证格式，包括之前的 independent 记录。
+
+再次申请独立资格时，除训练 lineage 外，还检查记录中的 development/historical 使用数据。同一冻结模型重复运行 independent 可以复验，但不是新增的独立数据。外部旧 joblib 没有训练 lineage，仍不能取得独立资格。本地锁不提供跨制品副本、网络文件系统或断电事务保证。
 
 **迁移模型要复制整个训练 run 目录，包括 evaluation_history。** 使用同版本代码和依赖，将新目录或其中的 manifest.json 传给 --artifact。只复制 model 会丢失配置和 lineage；删除或漏带 history 会丢失后续使用审计。应使用可信、完整的制品，不能把缺失记录解释为未使用。
 
-制品内旧训练路径用于追溯。加载完整制品后，预测不要求原机器训练文件存在，新输出默认写当前仓库 runs，也可用 --run-root 指定。配置可能含私有路径，分享前应审查；不要修改冻结文件后继续沿用旧 hash。
+制品内旧训练路径用于追溯。加载完整制品后，预测不要求原机器训练文件存在，新输出默认写当前工作区 runs，也可用 --run-root 指定。配置可能含私有路径，分享前应审查；不要修改冻结文件后继续沿用旧 hash。
 
 joblib 只加载可信来源。hash 能检测变化，不能让不可信序列化文件变安全。
 
@@ -197,8 +203,8 @@ uv sync --locked --extra dev
 uv run --locked python scripts/verify_engineering.py
 ```
 
-脚本运行全套测试和已安装的 model-workflow 命令入口，检查执行期间源码指纹未变；为日志、JUnit 结果和摘要新建 runs/engineering-* 目录，并刷新仓库中的[工程验收报告](engineering-verification.json)。刷新该汇总报告是脚本的明确行为，不会覆盖模型运行制品。
+脚本运行全套测试和当前环境的 model-workflow 入口，为日志、JUnit 和摘要新建 runs/engineering-* 目录。报告绑定源码、测试、配置、夹具、依赖锁和验证脚本，检查运行前后身份一致。缺少 XML、工具或执行失败同样保留失败摘要。脚本不再覆盖文档中的已发布报告。
 
-本轮验收为 276 项测试通过，失败、错误、跳过均为 0；已安装命令入口退出码为 0。只需快速运行测试时，可执行 `uv run --locked pytest -q`。后续复验的数量和状态以当次执行为准。
+正式安装另运行 `uv run --locked python scripts/verify_wheel.py`：构建 wheel、安装到独立环境，从客户目录运行四个命令并检查默认输出与源码范围。它与源码测试是不同证据层，不互相替代。当前汇总见[工程报告](engineering-verification.json)和[安装报告](wheel-verification.json)；边界与取舍见[0.2 改进记录](reliability.md)。只需快速运行测试时，执行 `uv run --locked pytest -q`。
 
 工程测试、合成样例和[历史回归](verification.json)都不能替代真实新场景的独立验收。

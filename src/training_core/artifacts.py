@@ -8,9 +8,10 @@ import json
 import os
 from pathlib import Path
 import platform
+import tempfile
 import uuid
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+from training_core.paths import workspace_root
 
 
 def sha256_file(path: Path) -> str:
@@ -22,10 +23,11 @@ def sha256_file(path: Path) -> str:
 
 
 def protected_paths() -> list[Path]:
-    roots = [REPOSITORY_ROOT / name for name in ("models", "data", "reports", ".git", ".venv")]
-    settings = REPOSITORY_ROOT / "local" / "protected.json"
+    root = workspace_root()
+    roots = [root / name for name in ("models", "data", "reports", ".git", ".venv")]
+    settings = root / "local" / "protected.json"
     if settings.exists():
-        roots.extend(Path(p) for p in json.loads(settings.read_text(encoding="utf-8-sig"))["paths"])
+        roots.extend(root / Path(p) for p in json.loads(settings.read_text(encoding="utf-8-sig"))["paths"])
     roots.extend(Path(p) for p in os.environ.get("MODEL_TRAINING_PROTECTED_PATHS", "").split(os.pathsep) if p)
     return [p.resolve() for p in roots]
 
@@ -41,12 +43,28 @@ def guard_output(path: str | Path, extra_protected=(), *, allow_existing: bool =
 
 
 def write_json(path: Path, value, *, overwrite: bool = False, extra_protected=()) -> None:
+    # Serialize before touching any existing record. A serialization error must
+    # not truncate the last readable state, and NaN is not valid JSON evidence.
+    payload = (json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
     target = guard_output(path, extra_protected, allow_existing=overwrite)
     target.parent.mkdir(parents=True, exist_ok=True)
-    # Initial writes use exclusive creation, including when another process races us.
-    with target.open("w" if overwrite else "x", encoding="utf-8", newline="\n") as handle:
-        json.dump(value, handle, ensure_ascii=False, indent=2)
-        handle.write("\n")
+    temporary = None
+    try:
+        descriptor, name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+        temporary = Path(name)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if overwrite:
+            os.replace(temporary, target)
+        else:
+            # Same-directory hard-link publication is atomic and fails if the
+            # destination was created by another process after our preflight.
+            os.link(temporary, target)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def begin_run(root: Path, command: str, config: dict, extra_protected=()) -> Path:
@@ -85,6 +103,13 @@ def load_manifest(path: Path) -> tuple[dict, Path]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or manifest.get("format_version") != 1:
         raise ValueError("Unsupported artifact manifest version")
+    state_path = manifest_path.parent / "run.json"
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("Artifact has no readable completion record") from exc
+    if not isinstance(state, dict) or state.get("command") != "train" or state.get("status") != "succeeded":
+        raise ValueError("Artifact training run is not successfully committed")
     for key in ("task_id", "backend", "model_path", "config_path", "lineage_path"):
         if not isinstance(manifest.get(key), str) or not manifest[key].strip():
             raise ValueError(f"Invalid or missing artifact field: {key}")

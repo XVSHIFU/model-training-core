@@ -14,9 +14,10 @@ KEY_NAMES = ("id", "exact", "template", "group")
 
 def _collect_keys(
     samples: list[Sample], fingerprints: Callable[[Sample], dict[str, str]], context: str,
-) -> dict[str, set[str]]:
+) -> tuple[dict[str, set[str]], dict[str, int]]:
     _validate_samples(samples, context)
     keys: dict[str, set[str]] = {key: set() for key in KEY_NAMES}
+    coverage = {key: 0 for key in KEY_NAMES}
     for sample in samples:
         values = fingerprints(sample)
         if not isinstance(values, Mapping):
@@ -33,7 +34,8 @@ def _collect_keys(
                 raise ValueError(f"{key} fingerprint must be a string for {context}")
             if value.strip():
                 keys[key].add(value)
-    return keys
+                coverage[key] += 1
+    return keys, coverage
 
 
 def _hashed_keys(keys: dict[str, set[str]]) -> dict[str, list[str]]:
@@ -56,14 +58,16 @@ def inspect_splits(
     summaries: dict[str, dict[str, Any]] = {}
     violations: list[dict[str, Any]] = []
     independent_names: set[str] = set()
+    training_present = any(specs[name].purpose == "train" and bool(rows) for name, rows in datasets.items())
     for name in sorted(datasets):
         samples, spec = datasets[name], specs[name]
         if spec.purpose not in PURPOSES:
             raise ValueError(f"Unknown dataset purpose for {name}: {spec.purpose}")
-        keys[name] = _collect_keys(samples, fingerprints, name)
+        keys[name], coverage = _collect_keys(samples, fingerprints, name)
         summaries[name] = {
             "purpose": spec.purpose, "count": len(samples),
             "independent": spec.independent, "provenance": spec.provenance,
+            "fingerprint_coverage": coverage,
         }
         if spec.purpose == "independent_test":
             independent_names.add(name)
@@ -72,6 +76,19 @@ def inspect_splits(
                     "scope": "independent_test", "code": "missing_independence_evidence",
                     "datasets": [name],
                     "reason": "Independent test requires nonempty data, an attestation and provenance",
+                })
+    if independent_names:
+        if not training_present:
+            violations.append({
+                "scope": "independent_test", "code": "missing_training_reference",
+                "datasets": sorted(independent_names),
+            })
+        for name, summary in summaries.items():
+            missing = [key for key in ("exact", "template") if summary["fingerprint_coverage"][key] != summary["count"]]
+            if missing:
+                violations.append({
+                    "scope": "independent_test", "code": "incomplete_fingerprint_coverage",
+                    "datasets": [name], "keys": missing,
                 })
     pairs: list[dict[str, Any]] = []
     learning = {"train", "development"}
@@ -98,6 +115,7 @@ def inspect_splits(
     return {
         "datasets": summaries, "pairs": pairs, "violations": violations,
         "training_selection_valid": training_valid,
+        "training_reference_present": training_present,
         "independent_test_eligible": independent_eligible,
         "valid": not violations,
         "count_definition": "Number of distinct shared keys; missing/blank fingerprints are excluded",
@@ -132,18 +150,27 @@ def build_lineage(
     for name in sorted(datasets):
         if specs[name].purpose not in PURPOSES:
             raise ValueError(f"Unknown dataset purpose for {name}: {specs[name].purpose}")
+        keys, coverage = _collect_keys(datasets[name], fingerprints, name)
         entries[name] = {
             "purpose": specs[name].purpose, "count": len(datasets[name]),
-            "keys": _hashed_keys(_collect_keys(datasets[name], fingerprints, name)),
+            "keys": _hashed_keys(keys), "coverage": coverage,
         }
     return {"version": 1, "entries": entries}
 
 
-def _lineage_entries(lineage: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+def validate_lineage(lineage: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Validate v1 membership and return normalized entries with coverage.
+
+    Older v1 documents did not count per-row fingerprint coverage. A distinct
+    key count equal to sample count proves full coverage; anything less is
+    unknown, because repeated content and missing keys cannot be distinguished.
+    """
     if lineage is None:
         return {}
-    if not isinstance(lineage, dict) or lineage.get("version") != 1 or not isinstance(lineage.get("entries"), dict):
+    if (not isinstance(lineage, dict) or type(lineage.get("version")) is not int
+            or lineage["version"] != 1 or not isinstance(lineage.get("entries"), dict)):
         raise ValueError("Invalid or unsupported lineage document")
+    normalized = {}
     for name, entry in lineage["entries"].items():
         if not isinstance(name, str) or not isinstance(entry, dict):
             raise ValueError("Invalid lineage entry")
@@ -160,7 +187,25 @@ def _lineage_entries(lineage: dict[str, Any] | None) -> dict[str, dict[str, Any]
                 raise ValueError(f"Invalid lineage membership count for {name}/{key}")
         if len(keys["id"]) != count:
             raise ValueError(f"Lineage IDs/count disagree for {name}")
-    return lineage["entries"]
+        if "coverage" not in entry:
+            coverage = {key: count if len(keys[key]) == count else None for key in KEY_NAMES}
+        else:
+            coverage = entry["coverage"]
+            if not isinstance(coverage, dict) or set(coverage) != set(KEY_NAMES):
+                raise ValueError(f"Invalid lineage coverage for {name}")
+            for key, covered in coverage.items():
+                if covered is not None and (
+                    not isinstance(covered, int) or isinstance(covered, bool)
+                    or covered < len(keys[key]) or covered > count
+                    or (covered > 0 and not keys[key])
+                ):
+                    raise ValueError(f"Invalid lineage coverage count for {name}/{key}")
+            if coverage["id"] != count:
+                raise ValueError(f"Lineage ID coverage/count disagree for {name}")
+        normalized[name] = {"purpose": entry["purpose"], "count": count,
+                            "keys": {key: list(values) for key, values in keys.items()},
+                            "coverage": dict(coverage)}
+    return normalized
 
 
 def check_lineage(
@@ -176,8 +221,9 @@ def check_lineage(
     """
     if spec.purpose not in PURPOSES:
         raise ValueError(f"Unknown dataset purpose: {spec.purpose}")
-    stored = _lineage_entries(lineage)
-    incoming = {key: set(values) for key, values in _hashed_keys(_collect_keys(samples, fingerprints, "evaluation")).items()}
+    stored = validate_lineage(lineage)
+    incoming_keys, coverage = _collect_keys(samples, fingerprints, "evaluation")
+    incoming = {key: set(values) for key, values in _hashed_keys(incoming_keys).items()}
     all_matches: dict[str, set[str]] = {key: set() for key in KEY_NAMES}
     entries = []
     for name in sorted(stored):
@@ -186,6 +232,7 @@ def check_lineage(
         for key in KEY_NAMES:
             all_matches[key].update(matches[key])
         entries.append({"name": name, "purpose": entry["purpose"], "count": entry["count"],
+                        "fingerprint_coverage": entry["coverage"],
                         "overlaps": {key: len(matches[key]) for key in KEY_NAMES}})
     training_present = any(entry["purpose"] == "train" and entry["count"] > 0 for entry in stored.values())
     overlaps = {key: len(all_matches[key]) for key in KEY_NAMES}
@@ -195,6 +242,10 @@ def check_lineage(
             violations.append("missing_independence_evidence")
         if not training_present:
             violations.append("missing_training_lineage")
+        if any(coverage[key] != len(samples) for key in ("exact", "template")):
+            violations.append("incomplete_evaluation_fingerprint_coverage")
+        if any(entry["coverage"][key] != entry["count"] for entry in stored.values() for key in ("exact", "template")):
+            violations.append("unverified_lineage_fingerprint_coverage")
         if any(overlaps.values()):
             violations.append("lineage_overlap")
     elif spec.purpose == "development" and any(
@@ -206,6 +257,7 @@ def check_lineage(
         "purpose": spec.purpose, "count": len(samples),
         "lineage_available": lineage is not None,
         "training_lineage_present": training_present,
+        "fingerprint_coverage": coverage,
         "entries": entries, "overlaps": overlaps,
         "violations": violations, "eligible": eligible,
         "independent_test_eligible": spec.purpose == "independent_test" and eligible,

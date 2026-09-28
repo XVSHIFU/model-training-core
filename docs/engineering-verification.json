@@ -1,22 +1,24 @@
 {
+  "format_version": 2,
   "status": "passed",
-  "verified_at": "2026-09-28T06:26:40.312633+00:00",
-  "scope": "Engineering acceptance with synthetic fixtures; no business generalization claim",
+  "verified_at": "2026-09-28T06:43:31.816795+00:00",
+  "scope": "Checkout engineering acceptance with public synthetic fixtures; not wheel installation or business generalization",
   "pytest": {
-    "tests": 276,
+    "tests": 364,
+    "passed": 361,
     "failures": 0,
     "errors": 0,
-    "skipped": 0,
-    "passed": 276,
+    "skipped": 3,
     "exit_code": 0
   },
+  "skipped_scope": "Three symbolic-link escape tests: Windows did not permit symbolic-link creation. These paths are not claimed as verified.",
   "installed_entrypoint": {
     "name": "model-workflow",
     "exit_code": 0
   },
   "runtime": {
     "python": "3.11.15",
-    "model-training-core": "0.1.0",
+    "model-training-core": "0.2.0",
     "numpy": "2.4.6",
     "scipy": "1.17.1",
     "scikit-learn": "1.9.0",
@@ -24,14 +26,36 @@
     "pydantic": "2.13.4",
     "joblib": "1.5.3"
   },
-  "source_sha256": "53904d4aad4e06d1334dd7639c65c3fa1c36bc8a84dee63533d75d17be010d4a",
-  "covered": [
-    "real three-class training and reload",
-    "legacy source tests",
-    "portable artifact lineage",
-    "dynamic development-use exclusion",
-    "malformed and corrupted artifact audit",
-    "manifest-directory output protection",
-    "no task imports in core"
+  "source_sha256": "b969a10d22e2d8274465807e8268d1ffc5a09d0f75a02655614967f46e24c489",
+  "inputs": {
+    "tests": {
+      "sha256": "fa17f88dc4505180f5c78160e66a0c2491e76c958597f3f5d7d09db3c0873249",
+      "file_count": 22
+    },
+    "configs": {
+      "sha256": "cc905a0e049e1f4b36d3b44146908ce5e0483e7ef842d191a91d6a8dbb719f1b",
+      "file_count": 4
+    },
+    "fixtures": {
+      "sha256": "94d33b845cea5de50921f3511c435e1dd07772ad6df51f3022fd63b3f3b34c41",
+      "file_count": 5
+    },
+    "environment": {
+      "sha256": "432d2e8296d863ffd942d67d4c8ba3ab671beccca63686ca826f4d9551d15d11",
+      "file_count": 2
+    },
+    "verification_scripts": {
+      "sha256": "25433494b0632c7e9c1fcb84f3b34ad2aefe5d61da425ed2c494a6e29e27b47c",
+      "file_count": 4
+    },
+    "source": {
+      "sha256": "b969a10d22e2d8274465807e8268d1ffc5a09d0f75a02655614967f46e24c489",
+      "file_count": 34
+    }
+  },
+  "inputs_unchanged": true,
+  "limitations": [
+    "Synthetic engineering checks do not establish business generalization.",
+    "Local Windows filesystem tested; network filesystems and power-loss durability not tested."
   ]
 }

@@ -2,6 +2,8 @@
 
 日期：2026-09-28。状态：P0–P5 已完成，传统 ML 训练框架完成工程迁移验收；不代表新场景泛化效果已获验证。
 
+本页保留首版迁移计划与验收结果。后续 0.2 针对安装、数据身份和中断/并发补强，见[可靠性改进](reliability.md)；当前验证以[工程报告](engineering-verification.json)和[安装报告](wheel-verification.json)为准。
+
 依据：[底层逻辑](logic-design.md)。实现位于独立新仓库，原交付目录只读。原模型、真实流量和历史报告未进入公开仓库；examples 仅含合成工程夹具。
 
 ## 1. 交付范围
@@ -44,7 +46,7 @@ local/                      # 外部资产与保护配置，Git 忽略
 | P2 数据与真实训练 | 已实现并完成阶段测试 | [data](../src/training_core/data.py)、[splits](../src/training_core/splits.py)、[稀疏后端](../src/training_backends/sparse_classifier.py)；多分类真实拟合、保存加载、目标与维度校验 |
 | P3 上传接回 | 专项验证完成 | [上传适配器](../src/training_tasks/upload/adapter.py)；3,009 条完整输出差异 0；两后端小型训练对照一致 |
 | P4 运行闭环 | 已实现并运行示例 | [runner](../src/training_core/runner.py)、[CLI](../src/training_core/cli.py)、[配置](../configs/)；24 条文本训练、6 条开发完成实际流程 |
-| P5 工程交付 | 已完成 | [整体验收](engineering-verification.json)：276 项测试通过，失败/错误/跳过均为 0；已安装命令入口退出码 0；文档链接有效，173 个原资产最终 hash 复核无变化 |
+| P5 工程交付 | 首版已完成 | 首版 276 项测试通过，失败/错误/跳过均为 0；已安装命令入口退出码 0；文档链接有效，173 个原资产最终 hash 复核无变化；后续结果见当前报告 |
 
 专项数字见[verification.json](verification.json)。原项目测试基线在依赖版本一致的新解释器中只读运行，不修改原环境。详细真实数据和模型保留在本机受保护区域，公开文件仅记录计数与一致性结果。
 
@@ -102,7 +104,7 @@ uv run --locked model-workflow evaluate --artifact $artifactPath --data examples
 - [x] 全套测试、安装入口和文档链接最终复验完成并记录。
 - [x] 最终代码状态下再次确认 173 个原资产 hash 无变化，完成 P5 收口。
 
-本轮最终整合检查为 276 项通过。后续改动使用[复验脚本](../scripts/verify_engineering.py)重新检查，以当次实际结果为准；操作见[使用手册](generic_training.md)。
+首版最终整合检查为 276 项通过。后续改动使用[复验脚本](../scripts/verify_engineering.py)重新检查，以当次实际结果为准；操作见[使用手册](generic_training.md)。
 
 ## 6. 回滚与未纳入事项
 

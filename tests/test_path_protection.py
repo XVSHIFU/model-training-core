@@ -22,7 +22,7 @@ def protected_workspace(tmp_path, monkeypatch):
     (root / "local" / "protected.json").write_text(
         json.dumps({"paths": [str(original)]}), encoding="utf-8"
     )
-    monkeypatch.setattr(artifacts, "REPOSITORY_ROOT", root)
+    monkeypatch.setattr(artifacts, "workspace_root", lambda: root)
     monkeypatch.delenv("MODEL_TRAINING_PROTECTED_PATHS", raising=False)
     return root, original
 

@@ -1,0 +1,110 @@
+{
+  "format_version": 1,
+  "status": "passed",
+  "verified_at": "2026-09-28T06:43:25.009961+00:00",
+  "scope": "Real wheel installation and synthetic CLI integration; no business generalization claim",
+  "wheel": {
+    "name": "model_training_core-0.2.0-py3-none-any.whl",
+    "sha256": "03498b41aa0c7bd26be44b2514ec7667c945fabee0309e086a67175063bde883"
+  },
+  "runtime": {
+    "python": "3.11.15",
+    "model-training-core": "0.2.0",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.9.0",
+    "lightgbm": "4.7.0",
+    "pydantic": "2.13.4",
+    "joblib": "1.5.3"
+  },
+  "source_sha256": "b969a10d22e2d8274465807e8268d1ffc5a09d0f75a02655614967f46e24c489",
+  "project_python_files": 34,
+  "inputs": {
+    "tests": {
+      "sha256": "fa17f88dc4505180f5c78160e66a0c2491e76c958597f3f5d7d09db3c0873249",
+      "file_count": 22
+    },
+    "configs": {
+      "sha256": "cc905a0e049e1f4b36d3b44146908ce5e0483e7ef842d191a91d6a8dbb719f1b",
+      "file_count": 4
+    },
+    "fixtures": {
+      "sha256": "94d33b845cea5de50921f3511c435e1dd07772ad6df51f3022fd63b3f3b34c41",
+      "file_count": 5
+    },
+    "environment": {
+      "sha256": "432d2e8296d863ffd942d67d4c8ba3ab671beccca63686ca826f4d9551d15d11",
+      "file_count": 2
+    },
+    "verification_scripts": {
+      "sha256": "25433494b0632c7e9c1fcb84f3b34ad2aefe5d61da425ed2c494a6e29e27b47c",
+      "file_count": 4
+    },
+    "source": {
+      "sha256": "b969a10d22e2d8274465807e8268d1ffc5a09d0f75a02655614967f46e24c489",
+      "file_count": 34
+    }
+  },
+  "inputs_unchanged": true,
+  "steps": [
+    {
+      "name": "build",
+      "exit_code": 0
+    },
+    {
+      "name": "create_environment",
+      "exit_code": 0
+    },
+    {
+      "name": "export_lock",
+      "exit_code": 0
+    },
+    {
+      "name": "install_dependencies",
+      "exit_code": 0
+    },
+    {
+      "name": "install_wheel",
+      "exit_code": 0
+    },
+    {
+      "name": "installation_identity",
+      "exit_code": 0
+    },
+    {
+      "name": "entrypoint_help",
+      "exit_code": 0
+    },
+    {
+      "name": "validate",
+      "exit_code": 0
+    },
+    {
+      "name": "train",
+      "exit_code": 0
+    },
+    {
+      "name": "predict",
+      "exit_code": 0
+    },
+    {
+      "name": "evaluate",
+      "exit_code": 0
+    },
+    {
+      "name": "predict_home",
+      "exit_code": 0
+    },
+    {
+      "name": "dependency_exclusion",
+      "exit_code": 0
+    }
+  ],
+  "training_samples": 24,
+  "predictions": 6,
+  "evaluation_samples": 6,
+  "default_workspace_output_verified": true,
+  "explicit_home_output_verified": true,
+  "project_only_fingerprint": true,
+  "unrelated_file_does_not_change_fingerprint": true
+}

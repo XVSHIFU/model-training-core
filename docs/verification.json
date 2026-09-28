@@ -1,7 +1,7 @@
 {
   "status": "passed",
   "purpose": "engineering_refactor_parity_not_independent_model_generalization",
-  "verified_at": "2026-09-28T06:24:28.289617+00:00",
+  "verified_at": "2026-09-28T06:44:05.852943+00:00",
   "captured_legacy_baseline": {
     "tests_passed": 168,
     "predictions": 3009,

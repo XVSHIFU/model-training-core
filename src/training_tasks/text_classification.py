@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
 from training_backends.sparse_classifier import SparseClassifier
@@ -16,7 +16,14 @@ from training_core.data import prepare_targets, stable_hash
 class TextInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str = Field(min_length=1)
-    features: list[float] = Field(default_factory=list)
+    features: list[Annotated[float, Field(strict=True, allow_inf_nan=False)]] = Field(default_factory=list)
+
+    @field_validator("text")
+    @classmethod
+    def nonblank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Text input must not be blank")
+        return value
 
 
 class TextClassificationTask:
@@ -27,10 +34,10 @@ class TextClassificationTask:
         target = record.get("target", record.get("label"))
         if target is not None and (not isinstance(target, str) or not target.strip()):
             raise ValueError("Text class labels must be nonempty strings")
-        return Sample(str(record.get("sample_id", record.get("id", ""))), inputs.model_dump(), target,
-                      str(record.get("source", "")), record.get("group_id"),
+        return Sample(record.get("sample_id", record.get("id")), inputs.model_dump(), target,
+                      record.get("source", ""), record.get("group_id"),
                       record.get("label_status", "labeled" if target is not None else "unlabeled"),
-                      dict(record.get("metadata", {})))
+                      record.get("metadata", {}))
 
     def fingerprints(self, sample):
         text = sample.inputs["text"]

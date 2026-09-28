@@ -6,7 +6,7 @@ import pytest
 
 from training_core.contracts import DatasetSpec, Sample
 from training_core.data import load_samples, merge_samples, prepare_targets, read_records, sha256_file, stable_hash
-from training_core.splits import build_lineage, check_lineage, inspect_splits, validate_lineage_report, validate_splits
+from training_core.splits import build_lineage, check_lineage, inspect_splits, validate_lineage, validate_lineage_report, validate_splits
 
 
 class Adapter:
@@ -24,7 +24,8 @@ def spec(purpose, **kwargs):
 
 
 def fingerprints(row):
-    return row.metadata.get("fingerprints", {})
+    return {"exact": stable_hash(row.inputs), "template": stable_hash(row.inputs),
+            **row.metadata.get("fingerprints", {})}
 
 
 @pytest.mark.parametrize("extension", ["json", "jsonl"])
@@ -121,7 +122,9 @@ def test_empty_fingerprints_skipped_and_independence_requires_evidence():
     specs = {"train": spec("train"), "test": spec("independent_test", independent=True, provenance="new window")}
     report = inspect_splits(data, specs, fingerprints)
     assert report["pairs"][0]["overlaps"] == {"id": 0, "exact": 0, "template": 0, "group": 0}
-    validate_splits(report, require_independent=True)
+    assert report["datasets"]["test"]["fingerprint_coverage"]["exact"] == 0
+    with pytest.raises(ValueError, match="independent"):
+        validate_splits(report, require_independent=True)
     assert report == inspect_splits(dict(reversed(list(data.items()))), dict(reversed(list(specs.items()))), fingerprints)
     for details in ({"independent": False, "provenance": "source"}, {"independent": True, "provenance": " "}):
         specs["test"] = spec("independent_test", **details)
@@ -218,3 +221,68 @@ def test_lineage_records_development_and_counts_union_without_duplicates():
     report = check_lineage([incoming], spec("independent_test", independent=True, provenance="source"), fingerprints, lineage)
     assert report["overlaps"]["template"] == 1
     assert sum(entry["overlaps"]["template"] for entry in report["entries"]) == 2
+
+
+def test_test_only_cannot_claim_independence_without_a_training_reference():
+    data = {"test": [sample("fresh")]}
+    specs = {"test": spec("independent_test", independent=True, provenance="source")}
+    report = inspect_splits(data, specs, fingerprints)
+    assert report["training_reference_present"] is False
+    assert {item["code"] for item in report["violations"]} == {"missing_training_reference"}
+    with pytest.raises(ValueError, match="independent"):
+        validate_splits(report, require_independent=True)
+
+
+def test_repeated_training_content_has_full_coverage_but_old_lineage_cannot_prove_it():
+    repeated = [sample("a", inputs={"text": "same content"}), sample("b", inputs={"text": "same content"})]
+    fresh = [sample("fresh")]
+    independent = spec("independent_test", independent=True, provenance="source")
+    datasets = {"train": repeated, "test": fresh}
+    specs = {"train": spec("train"), "test": independent}
+    report = inspect_splits(datasets, specs, fingerprints)
+    validate_splits(report, require_independent=True)
+    assert report["datasets"]["train"]["fingerprint_coverage"]["exact"] == 2
+    lineage = build_lineage({"train": repeated}, {"train": specs["train"]}, fingerprints)
+    assert len(lineage["entries"]["train"]["keys"]["exact"]) == 1
+    assert lineage["entries"]["train"]["coverage"]["exact"] == 2
+    validate_lineage_report(check_lineage(fresh, independent, fingerprints, lineage))
+    del lineage["entries"]["train"]["coverage"]
+    assert validate_lineage(lineage)["train"]["coverage"]["exact"] is None
+    old_report = check_lineage(fresh, independent, fingerprints, lineage)
+    assert "unverified_lineage_fingerprint_coverage" in old_report["violations"]
+    validate_lineage_report(check_lineage(fresh, spec("historical_regression"), fingerprints, lineage))
+
+
+def test_unique_legacy_lineage_can_prove_full_content_coverage():
+    lineage = build_lineage({"train": [sample("a"), sample("b")]}, {"train": spec("train")}, fingerprints)
+    del lineage["entries"]["train"]["coverage"]
+    assert validate_lineage(lineage)["train"]["coverage"] == {"id": 2, "exact": 2, "template": 2, "group": None}
+    validate_lineage_report(check_lineage([sample("fresh")], spec("independent_test", independent=True, provenance="source"), fingerprints, lineage))
+
+
+def test_partial_training_fingerprints_are_reported_and_block_independent_claim():
+    partial = [sample("a"), sample("b", metadata={"fingerprints": {"exact": ""}})]
+    datasets = {"train": partial, "test": [sample("fresh")]}
+    specs = {"train": spec("train"), "test": spec("independent_test", independent=True, provenance="source")}
+    report = inspect_splits(datasets, specs, fingerprints)
+    assert report["datasets"]["train"]["fingerprint_coverage"]["exact"] == 1
+    assert not report["independent_test_eligible"]
+    validate_splits(report, for_training=True)
+    lineage = build_lineage({"train": partial}, {"train": specs["train"]}, fingerprints)
+    checked = check_lineage(datasets["test"], specs["test"], fingerprints, lineage)
+    assert "unverified_lineage_fingerprint_coverage" in checked["violations"]
+
+
+@pytest.mark.parametrize("bad_coverage", [0, 2, True, "1", -1])
+def test_lineage_coverage_cannot_contradict_membership(bad_coverage):
+    lineage = build_lineage({"train": [sample("a")]}, {"train": spec("train")}, fingerprints)
+    lineage["entries"]["train"]["coverage"]["exact"] = bad_coverage
+    with pytest.raises(ValueError, match="coverage"):
+        validate_lineage(lineage)
+
+
+def test_lineage_cannot_claim_full_coverage_with_no_stored_content_keys():
+    lineage = build_lineage({"train": [sample("a")]}, {"train": spec("train")}, fingerprints)
+    lineage["entries"]["train"]["keys"]["exact"] = []
+    with pytest.raises(ValueError, match="coverage"):
+        validate_lineage(lineage)

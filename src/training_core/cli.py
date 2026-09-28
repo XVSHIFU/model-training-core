@@ -52,3 +52,6 @@ def main(resolve_task, argv=None):
     except (ValueError, RuntimeError, OSError) as exc:
         print(json.dumps({"status": "failed", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 1
+    except KeyboardInterrupt:
+        print(json.dumps({"status": "interrupted", "error": "Interrupted by user"}), file=sys.stderr)
+        return 130

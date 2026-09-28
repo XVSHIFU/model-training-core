@@ -5,12 +5,13 @@ from collections import Counter, defaultdict
 from dataclasses import asdict, is_dataclass, replace
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any, Iterable
 
 from pydantic import BaseModel
 
-from training_core.contracts import Sample, TaskAdapter
+from training_core.contracts import Sample, TaskAdapter, validate_sample
 
 
 def _json_value(value: Any) -> Any:
@@ -39,31 +40,59 @@ def sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
-def read_records(path: str | Path) -> list[dict[str, Any]]:
-    """Read a JSON object/array or JSONL, reporting locations without raw data."""
-    path = Path(path)
+def _reject_json_constant(value: str) -> None:
+    raise ValueError("JSON numbers must be finite")
+
+
+def _finite_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError("JSON numbers must be finite")
+    return parsed
+
+
+def _parse_records(raw: bytes, path: Path) -> list[dict[str, Any]]:
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"Expected UTF-8 data in {path}") from exc
     records: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8-sig") as stream:
-        if path.suffix.lower() in {".jsonl", ".ndjson"}:
-            for line_number, line in enumerate(stream, 1):
-                if not line.strip():
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    raise ValueError(f"Invalid JSON at {path}:{line_number}") from exc
-                if not isinstance(record, dict):
-                    raise ValueError(f"Expected a JSON object at {path}:{line_number}")
-                records.append(record)
-        else:
+    if path.suffix.lower() in {".jsonl", ".ndjson"}:
+        # Preserve legal Unicode separators inside JSON strings. splitlines()
+        # would incorrectly treat U+2028/U+2029 as record boundaries.
+        lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        for line_number, line in enumerate(lines, 1):
+            if not line.strip():
+                continue
             try:
-                value = json.load(stream)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON in {path} at line {exc.lineno}") from exc
-            records = [value] if isinstance(value, dict) else value
-            if not isinstance(records, list) or any(not isinstance(row, dict) for row in records):
-                raise ValueError(f"Expected a JSON object or an array of objects in {path}")
+                record = json.loads(line, parse_constant=_reject_json_constant, parse_float=_finite_json_float)
+            except ValueError as exc:
+                raise ValueError(f"Invalid JSON at {path}:{line_number}") from exc
+            if not isinstance(record, dict):
+                raise ValueError(f"Expected a JSON object at {path}:{line_number}")
+            records.append(record)
+    else:
+        try:
+            value = json.loads(text, parse_constant=_reject_json_constant, parse_float=_finite_json_float)
+        except ValueError as exc:
+            raise ValueError(f"Invalid JSON in {path}") from exc
+        records = [value] if isinstance(value, dict) else value
+        if not isinstance(records, list) or any(not isinstance(row, dict) for row in records):
+            raise ValueError(f"Expected a JSON object or an array of objects in {path}")
     return records
+
+
+def read_records_snapshot(path: str | Path) -> tuple[list[dict[str, Any]], str]:
+    """Parse and hash the same bytes, even if the path changes after reading."""
+    path = Path(path)
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    return _parse_records(raw, path), digest
+
+
+def read_records(path: str | Path) -> list[dict[str, Any]]:
+    """Compatibility reader; use the snapshot API when recording provenance."""
+    return read_records_snapshot(path)[0]
 
 
 def _validate_samples(samples: Iterable[Sample], context: str) -> None:
@@ -71,17 +100,25 @@ def _validate_samples(samples: Iterable[Sample], context: str) -> None:
     for index, sample in enumerate(samples):
         if not isinstance(sample, Sample):
             raise ValueError(f"Expected Sample at {context}, position {index}")
-        if not isinstance(sample.sample_id, str) or not sample.sample_id.strip():
-            raise ValueError(f"Sample ID must be a nonempty string at {context}, position {index}")
+        try:
+            validate_sample(sample)
+        except ValueError as exc:
+            raise ValueError(f"Invalid sample at {context}, position {index}: {exc}") from exc
         if sample.sample_id in seen:
             raise ValueError(f"Duplicate sample ID in {context}: {sample.sample_id}")
         seen.add(sample.sample_id)
 
 
 def load_samples(path: str | Path, adapter: TaskAdapter) -> list[Sample]:
-    samples = [adapter.parse(record) for record in read_records(path)]
+    return load_samples_snapshot(path, adapter)[0]
+
+
+def load_samples_snapshot(path: str | Path, adapter: TaskAdapter) -> tuple[list[Sample], str]:
+    """Return parsed samples and the SHA-256 of their exact source bytes."""
+    records, digest = read_records_snapshot(path)
+    samples = [adapter.parse(record) for record in records]
     _validate_samples(samples, str(path))
-    return samples
+    return samples, digest
 
 
 def prepare_targets(
@@ -101,8 +138,6 @@ def prepare_targets(
     reasons: Counter[str] = Counter()
     class_counts: Counter[str] = Counter()
     for sample in samples:
-        if sample.label_status not in {"labeled", "unlabeled", "unresolved", "conflict"}:
-            raise ValueError(f"Unrecognized label status for sample {sample.sample_id}")
         target = sample.target
         # Validate labels even on unresolved rows, so typos cannot disappear.
         if target is not None:

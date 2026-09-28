@@ -8,6 +8,7 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
 PURPOSES = {"train", "development", "historical_regression", "independent_test"}
+LABEL_STATUSES = {"labeled", "unlabeled", "unresolved", "conflict"}
 
 
 @dataclass
@@ -19,6 +20,23 @@ class Sample:
     group_id: str | None = None
     label_status: str = "unlabeled"
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        validate_sample(self)
+
+
+def validate_sample(sample: Sample) -> None:
+    """Validate identity and supervision metadata without coercing their types."""
+    if not isinstance(sample.sample_id, str) or not sample.sample_id.strip():
+        raise ValueError("Sample ID must be a nonempty string")
+    if not isinstance(sample.source, str):
+        raise ValueError("Sample source must be a string")
+    if sample.group_id is not None and (not isinstance(sample.group_id, str) or not sample.group_id.strip()):
+        raise ValueError("Sample group_id must be a nonempty string or null")
+    if not isinstance(sample.label_status, str) or sample.label_status not in LABEL_STATUSES:
+        raise ValueError("Unrecognized label status")
+    if not isinstance(sample.metadata, dict):
+        raise ValueError("Sample metadata must be an object")
 
 
 @dataclass
