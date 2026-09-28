@@ -52,6 +52,7 @@ uv run pytest -q
 - [0.2 可靠性改进与验证边界](docs/reliability.md) · [正式安装包验收](docs/wheel-verification.json)
 - [运行与新任务接入手册](docs/generic_training.md)
 - [底层训练逻辑](docs/logic-design.md)
+- [开源训练方法调研与硬件预算](docs/training-research-and-hardware.md)
 - [实施计划与完成状态](docs/implementation-plan.md)
 - [合成示例说明](examples/README.md)
 
