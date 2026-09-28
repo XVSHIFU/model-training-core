@@ -4,6 +4,8 @@
 
 这里的“通用”指训练流程和接口可以复用。当前真正实现的训练能力是 **TF-IDF + 可选数值特征 + Logistic / LightGBM 分类**；上传研判保留为兼容实例，另用三分类文本示例验证跨任务复用。语言生成、视觉、神经网络微调、分布式训练尚未实现。
 
+**换电脑或新会话接手：先读 [接手说明](docs/handoff.md)。** 最新方向是保留架构，在 CPU、最多 32GB 内存的预算下验证 [小模型反馈循环](docs/small-model-feedback-plan.md)；该实验目前是计划，尚未实现。
+
 ## 从一个小例子开始
 
 需要 Python 3.11 和 `uv`。在仓库目录运行以下 PowerShell 命令；示例数据都是公开合成数据，不需要准备业务数据或下载正式模型。
@@ -53,6 +55,7 @@ uv run pytest -q
 - [运行与新任务接入手册](docs/generic_training.md)
 - [底层训练逻辑](docs/logic-design.md)
 - [开源训练方法调研与硬件预算](docs/training-research-and-hardware.md)
+- [CPU 小模型反馈循环实验计划](docs/small-model-feedback-plan.md)
 - [实施计划与完成状态](docs/implementation-plan.md)
 - [合成示例说明](examples/README.md)
 
