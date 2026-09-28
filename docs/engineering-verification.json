@@ -1,0 +1,37 @@
+{
+  "status": "passed",
+  "verified_at": "2026-09-28T06:26:40.312633+00:00",
+  "scope": "Engineering acceptance with synthetic fixtures; no business generalization claim",
+  "pytest": {
+    "tests": 276,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 276,
+    "exit_code": 0
+  },
+  "installed_entrypoint": {
+    "name": "model-workflow",
+    "exit_code": 0
+  },
+  "runtime": {
+    "python": "3.11.15",
+    "model-training-core": "0.1.0",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.9.0",
+    "lightgbm": "4.7.0",
+    "pydantic": "2.13.4",
+    "joblib": "1.5.3"
+  },
+  "source_sha256": "53904d4aad4e06d1334dd7639c65c3fa1c36bc8a84dee63533d75d17be010d4a",
+  "covered": [
+    "real three-class training and reload",
+    "legacy source tests",
+    "portable artifact lineage",
+    "dynamic development-use exclusion",
+    "malformed and corrupted artifact audit",
+    "manifest-directory output protection",
+    "no task imports in core"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "task_id": "upload",
+  "backend": "logistic",
+  "seed": 42,
+  "datasets": {
+    "train": {
+      "path": "../examples/upload_train.jsonl",
+      "purpose": "train",
+      "provenance": "Pure synthetic fixture generated from scripts/capture_baseline.py:upload_fixture; engineering checks only."
+    }
+  },
+  "parameters": {
+    "thresholds": {
+      "confirmed": 0.85,
+      "likely": 0.6,
+      "failed": 0.85
+    }
+  },
+  "run_root": "../runs",
+  "evaluation_mode": "semantic"
+}

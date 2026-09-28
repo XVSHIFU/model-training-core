@@ -1,0 +1,20 @@
+{
+  "task_id": "text_classification",
+  "backend": "logistic",
+  "seed": 42,
+  "datasets": {
+    "train": {
+      "path": "../examples/text_train.jsonl",
+      "purpose": "train",
+      "provenance": "Public synthetic topic fixture authored for engineering checks; not real business data."
+    },
+    "development": {
+      "path": "../examples/text_dev.jsonl",
+      "purpose": "development",
+      "provenance": "Public synthetic topic fixture authored for engineering checks; not real business data."
+    }
+  },
+  "parameters": {},
+  "run_root": "../runs",
+  "evaluation_mode": "classification"
+}

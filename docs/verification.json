@@ -1,0 +1,104 @@
+{
+  "status": "passed",
+  "purpose": "engineering_refactor_parity_not_independent_model_generalization",
+  "verified_at": "2026-09-28T06:24:28.289617+00:00",
+  "captured_legacy_baseline": {
+    "tests_passed": 168,
+    "predictions": 3009,
+    "protected_files": 173
+  },
+  "runtime_packages_match_baseline": true,
+  "legacy_training_data_preparation": {
+    "total": 14105,
+    "used": 13173,
+    "excluded": 932,
+    "reasons": {
+      "target:unknown": 932
+    },
+    "class_counts": {
+      "0": 1083,
+      "1": 12090
+    },
+    "unknown_remains_labeled": true,
+    "expected_counts_exact": true
+  },
+  "legacy_champion": {
+    "predictions_checked": 3009,
+    "reference_predictions": 3009,
+    "complete_output_exact": true,
+    "different_outputs": 0
+  },
+  "synthetic_fixture": {
+    "samples": 49,
+    "texts_exact": true,
+    "structured_features": 24,
+    "structured_values_exact": true,
+    "backends": {
+      "logistic": {
+        "training_samples": 48,
+        "excluded_fixture_samples": 1,
+        "vocabulary_exact": true,
+        "classifier_parameters_exact": true,
+        "vectorizer_parameters_exact": true,
+        "idf_exact": true,
+        "learned_parameters_exact": true,
+        "manifest_except_training_time_exact": true,
+        "probabilities_exact": true,
+        "maximum_probability_difference": 0.0,
+        "joblib_roundtrip_exact": true,
+        "status": "passed"
+      },
+      "lightgbm": {
+        "training_samples": 48,
+        "excluded_fixture_samples": 1,
+        "vocabulary_exact": true,
+        "classifier_parameters_exact": true,
+        "vectorizer_parameters_exact": true,
+        "idf_exact": true,
+        "learned_parameters_exact": true,
+        "manifest_except_training_time_exact": true,
+        "probabilities_exact": true,
+        "maximum_probability_difference": 0.0,
+        "joblib_roundtrip_exact": true,
+        "status": "passed"
+      }
+    }
+  },
+  "legacy_training_cli": {
+    "synthetic_samples": 49,
+    "backends": {
+      "logistic": {
+        "exit_code": 0,
+        "status": "passed",
+        "training_samples": 48,
+        "sidecar_manifest_created": true,
+        "sidecar_manifest_exact": true,
+        "vocabulary_exact": true,
+        "classifier_parameters_exact": true,
+        "probabilities_exact": true,
+        "maximum_probability_difference": 0.0,
+        "complete_output_exact": true
+      },
+      "lightgbm": {
+        "exit_code": 0,
+        "status": "passed",
+        "training_samples": 48,
+        "sidecar_manifest_created": true,
+        "sidecar_manifest_exact": true,
+        "vocabulary_exact": true,
+        "classifier_parameters_exact": true,
+        "probabilities_exact": true,
+        "maximum_probability_difference": 0.0,
+        "complete_output_exact": true
+      }
+    }
+  },
+  "legacy_protected_assets": {
+    "checked_before_and_after": 173,
+    "changed_before": 0,
+    "missing_before": 0,
+    "changed_after": 0,
+    "missing_after": 0,
+    "all_sha256_unchanged": true
+  }
+}
